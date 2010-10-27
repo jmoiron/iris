@@ -25,7 +25,7 @@ def exiv_serialize(key, value):
         return format % value.to_float()
     if value.denominator > 4096:
         return '%0.2f' % value.to_float()
-    return '%s/%s' (value.numerator, value.denominator)
+    return '%s/%s' % (value.numerator, value.denominator)
 
 class MetaData(object):
     """Encapsulation of image metadata.  Accessing the 'exif' or 'iptc'
@@ -41,40 +41,32 @@ class MetaData(object):
 
     @memoize
     def metas(self):
-        return = {
+        return {
             'Exif' : self.exif(),
             'Iptc' : self.iptc(),
         }
 
-    @memoize
-    def exif(self):
+    def _hierarchical_split(self, keys):
         m = self._metadata
         d = {}
-        for key in m.exif_keys:
-            parts = key.split('.')
-            if parts[0] == 'Exif':
-                parts = parts[1:]
+        for key in keys:
+            parts = key.split('.')[1:]
             cur = d
             for part in parts[:-1]:
                 cur.setdefault(part, {})
                 cur = cur[part]
             name = parts[-1]
-            cur[name] = m[key].value
+            if key.startswith('Iptc'):
+                cur[name] = m[key].values
+            else:
+                cur[name] = exiv_serialize(key, m[key].value)
         return d
 
     @memoize
+    def exif(self):
+        return self._hierarchical_split(self._metadata.exif_keys)
+
+    @memoize
     def iptc(self):
-        m = self._metadata
-        d = {}
-        for key in m.iptc_keys:
-            import ipdb; ipdb.set_trace();
-            parts = key.split('.')
-            if parts[0] == 'IPTC':
-                parts = parts[1:]
-            cur = d
-            for part in parts[:-1]:
-                cur.setdefault(part, {})
-                cur = cur[part]
-            name = parts[-1]
-            cur[name] = m[key].value
-        return d
+        return self._hierarchical_split(self._metadata.iptc_keys)
+
