@@ -3,3 +3,6 @@
 
 """Iris script executable."""
 
+import sys
+from iris import script
+sys.exit(script.main())
