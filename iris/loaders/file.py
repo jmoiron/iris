@@ -13,6 +13,8 @@ def exiv_serialize(key, value):
     that where it makes sense, or to a string "num/denom" where that
     makes sense."""
     if not isinstance(value, (Rational, GPSCoordinate)):
+        if isinstance(value, basestring) and '\x00' in value:
+            return '(proprietary)'
         return value
 
     fraction_keys = []
