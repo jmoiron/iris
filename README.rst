@@ -14,8 +14,8 @@ requirements
 
 Unfortunately, *iris* requires software that is not straightforward to install:
 
- * pyexiv2_ >= 2.2.0
- * mongodb_ = 1.6.3
+* pyexiv2_ >= 2.2.0
+* mongodb_ = 1.6.3
 
 .. _pyexiv2: http://tilloy.net/dev/pyexiv2/
 .. _mongodb: http://www.mongodb.org/
@@ -25,8 +25,8 @@ the client library *pymongo*), but was developed using the versions listed.
 *iris* also requires these python modules, installable via *pip* and usually 
 pulled in automatically during a *pip* install of iris:
 
- * cmdparse_
- * pymongo_ >= 1.9
+* cmdparse_
+* pymongo_ >= 1.9
 
 .. _cmdparse: http://github.com/jmoiron/python-cmdparse
 .. _pymongo: http://api.mongodb.org/python/1.9%2B/index.html
@@ -34,7 +34,7 @@ pulled in automatically during a *pip* install of iris:
 usage
 =====
 
-Everything below is lies.
+Everything below is lies::
 
   iris tag *.jpg
 
