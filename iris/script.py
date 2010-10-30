@@ -74,7 +74,8 @@ class ListCommand(Command):
             pprint.pprint([p.__dict__ for p in photos])
         elif options.verbose == 1:
             for photo in photos:
-                print '-- %s ' % utils.bold(photo.path)
+                moved_tag = '[%s]' % utils.bold('e', utils.red) if getattr(photo, 'moved', False) else ''
+                print '-- %s %s' % (utils.bold(photo.path), moved_tag)
                 tagstr = '  tags: %s' % ', '.join(photo.tags) if photo.tags else ''
                 print '  %dx%d, %s%s' % (photo.x, photo.y, utils.humansize(photo.size), tagstr)
         else:
@@ -101,6 +102,8 @@ class SyncCommand(Command):
                 photo.save()
                 log('%s [%s]' % (photo.path, utils.bold('e', color=utils.red)))
                 continue
+            if hasattr(photo, 'moved'):
+                delattr(photo, 'moved')
             photo.sync()
             log('%s' % photo.path)
 
