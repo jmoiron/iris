@@ -34,7 +34,7 @@ class IrisConfig(object):
         config.add_section('iris')
         config.add_section('db')
         config.set('db', 'host', '127.0.0.1')
-        config.set('db', 'port', '27010')
+        config.set('db', 'port', '27017')
         with open(self.path, 'w') as config_file:
             config.write(config_file)
         self.config = config
