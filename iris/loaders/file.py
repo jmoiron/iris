@@ -42,7 +42,10 @@ def exiv_serialize(key, value):
         return date_format(value)
 
     fraction_keys = []
-    float_keys = {'ApertureValue' : '%0.1f',}
+    float_keys = {
+        'ApertureValue' : '%0.1f',
+        'FNumber' : '%0.1f',
+    }
 
     if key in fraction_keys:
         return "%s/%s" % (value.numerator, value.denominator)
@@ -97,9 +100,9 @@ class MetaData(object):
             if discard(name):
                 continue
             if key.startswith('Iptc'):
-                cur[name] = exiv_serialize(key, m[key].values)
+                cur[name] = exiv_serialize(name, m[key].values)
             else:
-                cur[name] = exiv_serialize(key, m[key].value)
+                cur[name] = exiv_serialize(name, m[key].value)
         return d
 
     def _exif(self):
