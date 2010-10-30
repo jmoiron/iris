@@ -19,8 +19,7 @@ class AddCommand(Command):
         mostly defer to other functions that do the stuff for us."""
         for arg in args:
             # TODO: handle error conditions here
-            photo = backend.Photo(arg)
-            photo._save()
+            backend.Photo(arg).save()
 
 class TagCommand(Command):
     """Tag one or more photos.
@@ -84,6 +83,27 @@ class ListCommand(Command):
         print ''
         print '%d photos' % len(photos)
 
+class SyncCommand(Command):
+    def __init__(self):
+        Command.__init__(self, 'sync', summary='sync all images currently in iris')
+        self.add_option('-v', '--verbose', action='count', help='increase verbosity')
+
+    def run(self, options, args):
+        from iris import utils
+        db = backend.get_database()
+        photos = [backend.Photo(p) for p in db.photos.find()]
+        def log(string):
+            if options.verbose:
+                print string
+        for photo in photos:
+            if not os.path.exists(photo.path):
+                photo.moved = True
+                photo.save()
+                log('%s [%s]' % (photo.path, utils.bold('e', color=utils.red)))
+                continue
+            photo.sync()
+            log('%s' % photo.path)
+
 def main():
     import pymongo
     parser = CommandParser()
@@ -91,7 +111,8 @@ def main():
     parser.add_command(AddCommand())
     parser.add_command(TagCommand())
     parser.add_command(ListCommand())
-    parser.add_command(QueryCommand())
+    parser.add_command(SyncCommand())
+    #parser.add_command(QueryCommand())
     command, options, args = parser.parse_args()
     if command is None:
         parser.print_help()

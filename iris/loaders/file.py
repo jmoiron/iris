@@ -94,7 +94,7 @@ class MetaData(object):
                 cur.setdefault(part, {})
                 cur = cur[part]
             name = parts[-1]
-            if discard(key):
+            if discard(name):
                 continue
             if key.startswith('Iptc'):
                 cur[name] = exiv_serialize(key, m[key].values)

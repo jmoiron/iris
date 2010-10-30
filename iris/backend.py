@@ -53,7 +53,7 @@ class Photo(object):
         """When loading from the db."""
         self.__dict__.update(d)
 
-    def _save(self):
+    def save(self):
         import bson
         db = get_database()
         if not hasattr(self, '_id'):
@@ -66,6 +66,10 @@ class Photo(object):
             import traceback
             tb = traceback.format_exc()
             import ipdb; ipdb.set_trace();
+
+    def sync(self):
+        self.load(self.path)
+        self.save()
 
 class FileLoader(object):
     pass
