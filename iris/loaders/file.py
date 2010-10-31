@@ -65,6 +65,9 @@ def extract_tags(exif, iptc):
 def discard(key):
     return key.startswith('0x')
 
+class UnknownImageTypeException(Exception):
+    pass
+
 class MetaData(object):
     """Encapsulation of image metadata.  Accessing the 'exif' or 'iptc'
     attributes will get you a hierarchical dictionary with the correct
@@ -73,7 +76,10 @@ class MetaData(object):
 
     def __init__(self, path):
         _metadata = pyexiv2.ImageMetadata(path)
-        _metadata.read()
+        try:
+            _metadata.read()
+        except IOError:
+            raise UnknownImageTypeException('File at "%s" has unknown type (not an image?)' % path)
         self._metadata = _metadata
         x,y = _metadata.dimensions
         exif = self._exif()
