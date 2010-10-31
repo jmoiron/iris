@@ -35,7 +35,7 @@ def get_database(host=None, port=None):
     return connection.iris
 
 
-class BulkUpdater(object):
+class BulkInserter(object):
     """A caching updater for mongo documents going into the same collection.
     You can choose a threshold, and add documents to it, and they will be
     flushed after the threshold number of documents have been reached."""
