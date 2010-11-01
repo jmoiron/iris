@@ -12,7 +12,7 @@ import pymongo
 import threading
 
 from iris.loaders import file, picasa
-from iris.utils import memoize, OpenStruct
+from iris.utils import memoize, OpenStruct, exclude_self
 
 @memoize
 def get_database(host=None, port=None):
@@ -53,7 +53,7 @@ class BulkInserter(object):
         self._updates = 0
         self.lock = threading.RLock()
 
-    def update(self, *documents):
+    def insert(self, *documents):
         """Add one or more documents to be updated whenever the threshold is met.
         If the document has an '_id', it's considered an update.  If it doesn't,
         it's considered an insert.  If the document has a '_unique_attr'
@@ -131,14 +131,49 @@ class BulkInserter(object):
         self.documents['inserts'] = []
         self.total = 0
 
-
 class PagingCursor(object):
-    def __init__(self, collection, sort=None):
+    """A cursor-like object that iterates through a large queryset a little at
+    a time.  Meant to be used by the Pager only, its behavior is determined by
+    the Pager that created it.  It is NOT thread safe to iterate a PagingCursor
+    from multiple threads, as it uses internal state to store pagination."""
+    def __init__(self, pager, sort, spec, fields):
+        self.__dict__.update(exclude_self(locals()))
+        self.collection = pager.collection
+        self.threshold = pager.threshold
+        self.sort = self.sort or pager.sort
+        self._num_pages = 0
+        self._page = []
+
+    def _next_query(self):
+        skip = self._num_pages * self.threshold
+        self._page = list(self.collection.find(
+            self.spec,
+            fields=self.fields,
+            sort=self.sort,
+            skip=self._num_pages * self.threshold,
+            limit=self.threshold
+        ))
+        if self._page:
+            self._num_pages += 1
+
+    def __iter__(self):
+        self._next_query()
+        while self._page:
+            for item in self._page:
+                yield item
+            self._next_query()
+
+class Pager(object):
+    """A class that can perform simple 'finds' against a database and present
+    one iterate over all results even though only a maximum of `threshold`
+    (default: 100) are ever loaded at one time."""
+    def __init__(self, collection, sort=None, threshold=100):
         self.collection = collection
+        self.threshold = threshold
         self.sort = sort or [('_id', pymongo.DESCENDING)]
 
     def find(self, spec, fields=None, sort=None):
-        pass
+        return PagingCursor(self, sort, spec, fields)
 
 class Model(OpenStruct):
     def save(self):
