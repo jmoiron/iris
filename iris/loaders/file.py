@@ -62,6 +62,11 @@ def extract_tags(exif, iptc):
     tags += iptc.get('Application', {}).get('Keywords', [])
     return tags
 
+def extract_caption(exif, iptc):
+    """Given exif and iptc table, try to extract a caption."""
+    caption = iptc.get('Application2', {}).get('Caption', '')
+    return caption or None
+
 def discard(key):
     return key.startswith('0x')
 
@@ -85,6 +90,7 @@ class MetaData(object):
         exif = self._exif()
         iptc = self._iptc()
         tags = extract_tags(exif, iptc)
+        caption = extract_caption(exif, iptc)
         self.__dict__.update(utils.exclude_self(locals()))
 
     def metas(self):

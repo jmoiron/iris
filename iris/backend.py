@@ -32,7 +32,13 @@ def get_database(host=None, port=None):
     photos = db.photos
     photos.create_index([('path', pymongo.DESCENDING)])
     photos.create_index([('date', pymongo.DESCENDING)])
-    return connection.iris
+    return db
+
+def flush():
+    """Flush the iris database.  You should probably only do this if you're
+    testing things."""
+    db = get_database()
+    db.drop_collection('photos')
 
 class BulkInserter(object):
     """A caching updater for mongo documents going into the same collection.
@@ -60,6 +66,7 @@ class BulkInserter(object):
         update.  This method is thread safe."""
         self.lock.acquire()
         for document in documents:
+            document = dict(document)
             if '_id' in document:
                 self.documents['updates'].append(document)
             else:
@@ -202,43 +209,43 @@ class Model(OpenStruct):
             import ipdb; ipdb.set_trace();
 
 class Manager(object):
-    """A thin wrapper around a generic mongo collection cursor that is lazy
-    so it is safe to use at class level."""
+    """A thin wrapper around a generic mongo collection cursor that auto-applies
+    our class and """
     def __init__(self, cls):
         self.cls = cls
-        self.collection_name = cls._collection
-        self.collection = None
+        try:
+            self.collection = get_database()[cls._collection]
+        except:
+            self.collection = None
 
     def _init(self):
         if self.collection is None:
-            self.collection = get_database()[self.collection_name]
+            self.collection = get_database()[self.cls._collection]
 
     def find(self, *args, **kwargs):
         self._init()
         if 'as_class' not in kwargs:
             kwargs['as_class'] = self.cls
+        if 'paged' in kwargs:
+            pager = Pager(self.collection, threshold=kwargs['paged'])
+            return pager.find(*args, **kwargs)
         return self.collection.find(*args, **kwargs)
 
 class Photo(Model):
     _collection = 'photos'
 
-    def from_path(self, path):
+    def load_file(self, path):
         path = os.path.realpath(path)
         meta = file.MetaData(path)
-        copykeys = ('x', 'y', 'exif', 'iptc', 'tags', 'path')
+        copykeys = ('x', 'y', 'exif', 'iptc', 'tags', 'path', 'caption')
         d = dict([(k,v) for k,v in meta.__dict__.iteritems() if k in copykeys])
         self.__dict__.update(d)
         stat = os.stat(meta.path)
         self.size = stat.st_size
 
-    def _init_from_dict(self, d):
-        """When loading from the db."""
-        self.__dict__.update(d)
+    def __repr__(self):
+        return '<iris.backend.Photo "%s">' % (self.path or self._id or '(at 0x%08X)' % id(self))
 
-    def sync(self):
-        self.load(self.path)
-        self.save()
-
-class FileLoader(object):
-    pass
+# XXX: we could do this in a meta class but for now this is fine
+Photo.objects = Manager(Photo)
 

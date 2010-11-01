@@ -17,9 +17,17 @@ class AddCommand(Command):
     def run(self, options, args):
         """Args here are a bunch of file or directory names.  We want to
         mostly defer to other functions that do the stuff for us."""
+        from iris.loaders.file import UnknownImageTypeException
+        collection = backend.Photo.objects.collection
+        inserter = backend.BulkInserter(collection, threshold=50)
         for arg in args:
-            # TODO: handle error conditions here
-            backend.Photo(arg).save()
+            photo = backend.Photo()
+            try:
+                photo.load_file(arg)
+            except UnknownImageTypeException:
+                continue
+            inserter.insert(photo)
+        inserter.flush()
 
 class TagCommand(Command):
     """Tag one or more photos.
@@ -107,6 +115,27 @@ class SyncCommand(Command):
             photo.sync()
             log('%s' % photo.path)
 
+class FlushCommand(Command):
+    def __init__(self):
+        Command.__init__(self, 'flush', summary='flush iris\' database;  this cannot be reversed!')
+        self.add_option('-f', '--force', action='store_true', help='do not prompt')
+
+    def run(self, options, args):
+        from iris import utils
+        if options.force:
+            backend.flush()
+            return
+        while True:
+            prompt = 'Flush database? (this cannot be reversed!) [%s]|%s: '
+            prompt = prompt % (utils.bold('n'), utils.bold('y', color=utils.red))
+            answer = raw_input(prompt)
+            if answer not in 'yYnN':
+                print 'Invalid;  please answer y or n.'
+                continue
+            if ans in 'yY':
+                backend.flush()
+
+
 def main():
     import pymongo
     parser = CommandParser()
@@ -115,6 +144,7 @@ def main():
     parser.add_command(TagCommand())
     parser.add_command(ListCommand())
     parser.add_command(SyncCommand())
+    parser.add_command(FlushCommand())
     #parser.add_command(QueryCommand())
     command, options, args = parser.parse_args()
     if command is None:
