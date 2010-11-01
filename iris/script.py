@@ -46,14 +46,6 @@ class TagCommand(Command):
     def run(self, options, args):
         print "tag: ", options, args
 
-class QueryCommand(Command):
-    """Query iris' database for photos."""
-    def __init__(self):
-        Command.__init__(self, "query", summary="query for photos")
-
-    def run(self, options, args):
-        print "query: ", options, args
-
 class HelpCommand(Command):
     """Provides extended help for other commands."""
     def __init__(self):
@@ -75,8 +67,7 @@ class ListCommand(Command):
 
     def run(self, options, args):
         from iris import utils
-        db = backend.get_database()
-        photos = [backend.Photo(p) for p in db.photos.find()]
+        photos = backend.Photo.objects.find(sort=[('path', backend.pymongo.ASCENDING)], paged=100)
         if options.verbose > 1:
             import pprint
             pprint.pprint([p.__dict__ for p in photos])
@@ -90,7 +81,7 @@ class ListCommand(Command):
             for photo in photos:
                 print photo.path
         print ''
-        print '%d photos' % len(photos)
+        print '%d photos' % backend.Photo.objects.find().count()
 
 class SyncCommand(Command):
     def __init__(self):
@@ -145,7 +136,6 @@ def main():
     parser.add_command(ListCommand())
     parser.add_command(SyncCommand())
     parser.add_command(FlushCommand())
-    #parser.add_command(QueryCommand())
     command, options, args = parser.parse_args()
     if command is None:
         parser.print_help()
