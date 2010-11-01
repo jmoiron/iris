@@ -72,16 +72,58 @@ class PagerTest(TestCase):
         self.db.drop_collection(self.collection)
 
     def test_paging_cursor(self):
+        """A simple set of tests that makes sure our paging cursor functions
+        properly on simple queries."""
         collection = self.db[self.collection]
         cursor = backend.Pager(collection, threshold=250)
         items = cursor.find({'value': {'$lte' : 1500}})
-        # make sure that when we iterate over it, it only ever has 'threshold'
         for item in items:
             self.assertEquals(len(items._page), 250)
         self.assertEquals(items._num_pages, 6)
-        # first, make sure that using it behaves regularly
         items = cursor.find({'value': {'$lte' : 1500}})
         item_list = list(items)
         self.assertEquals(len(item_list), 1500)
+        items = cursor.find({'value': {'$lte' : 371}})
+        item_list = list(items)
+        self.assertEquals(len(item_list), 371)
+        self.assertEquals(items._num_pages, 2)
 
+    def test_paging_cursor_values(self):
+        """Test that the paging cursor allows us to restrict values in returned
+        documents like the regular 'find'."""
+        collection = self.db[self.collection]
+        cursor = backend.Pager(collection, threshold=100)
+        items = cursor.find({'value': {'$lte' : 500}}, ['_id'])
+        for item in items:
+            self.assertEquals(len(item.keys()), 1)
+            self.assertEquals(item.keys()[0], '_id')
+        self.assertEquals(items._num_pages, 5)
+
+    def test_paging_cursor_sort(self):
+        """Test that the paging cursor allows a custom sort."""
+        import pymongo
+        collection = self.db[self.collection]
+        cursor = backend.Pager(collection, threshold=100)
+        items = cursor.find({'value': {'$lte' : 500}}, sort=[('value', pymongo.ASCENDING)])
+        item_list = list(items)
+        self.assertEquals(item_list[0]['value'], 1)
+        self.assertEquals(item_list[-1]['value'], 500)
+        self.assertEquals(items._num_pages, 5)
+        items = cursor.find({'value': {'$lte' : 600}}, sort=[('value', pymongo.DESCENDING)])
+        item_list = list(items)
+        self.assertEquals(item_list[0]['value'], 600)
+        self.assertEquals(item_list[-1]['value'], 1)
+        self.assertEquals(items._num_pages, 6)
+
+    def test_paging_cursor_skip_limit(self):
+        """Test that the paging cursor allows transparent handling of custom
+        skip/limit settings."""
+        collection = self.db[self.collection]
+        cursor = backend.Pager(collection, threshold=100)
+        # this should only go through 2 pages, from 500 - 1000
+        items = cursor.find({'value': {'$lte': 1500}}, skip=500, limit=500)
+        item_list = list(items)
+        self.assertEquals(items._num_pages, 5)
+        self.assertEquals(item_list[0]['value'], 1000)
+        self.assertEquals(item_list[-1]['value'], 501)
 

@@ -34,7 +34,6 @@ def get_database(host=None, port=None):
     photos.create_index([('date', pymongo.DESCENDING)])
     return connection.iris
 
-
 class BulkInserter(object):
     """A caching updater for mongo documents going into the same collection.
     You can choose a threshold, and add documents to it, and they will be
@@ -136,23 +135,35 @@ class PagingCursor(object):
     a time.  Meant to be used by the Pager only, its behavior is determined by
     the Pager that created it.  It is NOT thread safe to iterate a PagingCursor
     from multiple threads, as it uses internal state to store pagination."""
-    def __init__(self, pager, sort, spec, fields):
+    def __init__(self, pager, *args, **kwargs):
         self.__dict__.update(exclude_self(locals()))
         self.collection = pager.collection
         self.threshold = pager.threshold
-        self.sort = self.sort or pager.sort
+        # we need a stable sort in order to page reliably
+        self._sort = kwargs.get('sort', pager.sort)
+        # adjust for a base skip
+        self._base_skip = kwargs.get('skip', 0)
+        # adjust for a given limit
+        self._base_limit = kwargs.get('limit', None)
         self._num_pages = 0
         self._page = []
 
     def _next_query(self):
-        skip = self._num_pages * self.threshold
-        self._page = list(self.collection.find(
-            self.spec,
-            fields=self.fields,
-            sort=self.sort,
-            skip=self._num_pages * self.threshold,
-            limit=self.threshold
-        ))
+        skip = self._base_skip + (self._num_pages * self.threshold)
+        limit = self.threshold
+        if self._base_limit is not None:
+            distance = (skip - self._base_skip) + limit
+            if distance > self._base_limit:
+                limit = (self._base_skip + self._base_limit) - skip
+            if skip == (self._base_skip + self._base_limit):
+                self._page = []
+                return
+        assert limit >= 0
+        kwargs = dict(self.kwargs)
+        kwargs['skip'] = skip
+        kwargs['limit'] = limit
+        kwargs['sort'] = self._sort
+        self._page = list(self.collection.find(*self.args, **kwargs))
         if self._page:
             self._num_pages += 1
 
@@ -172,10 +183,12 @@ class Pager(object):
         self.threshold = threshold
         self.sort = sort or [('_id', pymongo.DESCENDING)]
 
-    def find(self, spec, fields=None, sort=None):
-        return PagingCursor(self, sort, spec, fields)
+    def find(self, *args, **kwargs):
+        return PagingCursor(self, *args, **kwargs)
 
 class Model(OpenStruct):
+    """A base model for whatever types of data we need to save.  For now this
+    is just photos, but we might have some more application data to save."""
     def save(self):
         import bson
         db = get_database()
@@ -188,6 +201,23 @@ class Model(OpenStruct):
             tb = traceback.format_exc()
             import ipdb; ipdb.set_trace();
 
+class Manager(object):
+    """A thin wrapper around a generic mongo collection cursor that is lazy
+    so it is safe to use at class level."""
+    def __init__(self, cls):
+        self.cls = cls
+        self.collection_name = cls._collection
+        self.collection = None
+
+    def _init(self):
+        if self.collection is None:
+            self.collection = get_database()[self.collection_name]
+
+    def find(self, *args, **kwargs):
+        self._init()
+        if 'as_class' not in kwargs:
+            kwargs['as_class'] = self.cls
+        return self.collection.find(*args, **kwargs)
 
 class Photo(Model):
     _collection = 'photos'
