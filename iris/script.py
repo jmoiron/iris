@@ -8,26 +8,35 @@ import os
 from cmdparse import Command, CommandParser
 from iris import backend
 
+def insert_photos(paths):
+    """Insert a single photo.  Meant to be run in a parallelized scenario."""
+    from iris.loaders.file import UnknownImageTypeException
+    collection = backend.Photo.objects.collection
+    inserter = backend.BulkInserter(collection, threshold=50)
+    for path in paths:
+        photo = backend.Photo()
+        try:
+            photo.load_file(path)
+        except UnknownImageTypeException:
+            continue
+        inserter.insert(photo)
+    inserter.flush()
+
 class AddCommand(Command):
     """Add a photo or directory of photos."""
     def __init__(self):
         Command.__init__(self, "add", summary="add files or directories.")
         self.add_option('-r', '--recursive', action='store_true', default=False)
+        self.add_option('', '--parallelize', action='store_true', default=False, help='run on more than one CPU')
 
     def run(self, options, args):
         """Args here are a bunch of file or directory names.  We want to
         mostly defer to other functions that do the stuff for us."""
-        from iris.loaders.file import UnknownImageTypeException
-        collection = backend.Photo.objects.collection
-        inserter = backend.BulkInserter(collection, threshold=50)
-        for arg in args:
-            photo = backend.Photo()
-            try:
-                photo.load_file(arg)
-            except UnknownImageTypeException:
-                continue
-            inserter.insert(photo)
-        inserter.flush()
+        if options.parallelize:
+            from iris import utils
+            utils.auto_parallelize(insert_photos, args)
+            return None
+        return insert_photos(args)
 
 class TagCommand(Command):
     """Tag one or more photos.
@@ -123,13 +132,34 @@ class FlushCommand(Command):
             if answer not in 'yYnN':
                 print 'Invalid;  please answer y or n.'
                 continue
-            if ans in 'yY':
+            if answer in 'yY':
                 backend.flush()
+            return
 
+def run_with_profile(command, options, args):
+    import cProfile as Profile
+    import pstats, tempfile
+    outfile = tempfile.NamedTemporaryFile(dir='/dev/shm/')
+    Profile.runctx('command.run(options, args)', globals(), locals(), outfile.name)
+    stats = pstats.Stats(outfile.name)
+    stats.sort_stats('cumulative').print_stats(25)
+    outfile.close() # deletes the temp file
+    return 0
+
+def run_with_timer(command, options, args):
+    from iris import utils
+    import time
+    t0 = time.time()
+    ret = command.run(options, args)
+    td = time.time() - t0
+    print "timer results: %ss" % (utils.bold("%0.3f" % td))
+    return ret
 
 def main():
     import pymongo
     parser = CommandParser()
+    parser.add_option('', '--profile', action='store_true', help='profile the running command')
+    parser.add_option('', '--timer', action='store_true', help='record the time it takes to run the command')
     parser.add_command(HelpCommand())
     parser.add_command(AddCommand())
     parser.add_command(TagCommand())
@@ -141,6 +171,10 @@ def main():
         parser.print_help()
         return 0
     try:
+        if options.profile:
+            return run_with_profile(command, options, args)
+        if options.timer:
+            return run_with_timer(command, options, args)
         return command.run(options, args)
     except KeyboardInterrupt:
         return -1

@@ -4,11 +4,45 @@
 """ """
 
 from functools import wraps
+import math
+import multiprocessing
 
 # terminal color rubbish
 white,black,red,green,yellow,blue,purple = range(89,96)
 def color(string, color=green, bold=False):
     return '\033[%s%sm' % ('01;' if bold else '', color) + str(string) + '\033[0m'
+
+# the following code is from my gist here:
+#   http://gist.github.com/596073
+def split(iterable, n):
+    """Splits an iterable up into n roughly equally sized groups."""
+    groupsize = int(math.floor(len(iterable) / float(n)))
+    remainder = len(iterable) % n
+    sizes = [groupsize+1 for i in range(remainder)] + [groupsize]*(n-remainder)
+    pivot, groups = 0, []
+    for size in sizes:
+        groups.append(iterable[pivot:pivot+size])
+        pivot += size
+    return groups
+
+def parallelize(n, function, args):
+    """Parallelizes a function n ways.  Returns a list of results.  The
+    function must be one that takes a list of arguments and operates over
+    them all, with each item dealt with in isolation from the others."""
+    pool = multiprocessing.Pool(n)
+    arg_groups = split(args, n)
+    waiters = []
+    for i in range(n):
+        waiters.append(
+            pool.apply_async(function, (arg_groups[i],))
+        )
+    results = [r.get() for r in waiters]
+    return results
+
+def auto_parallelize(function, args):
+    """Auto-parallelizes a function depending on the number of cpu cores."""
+    n = multiprocessing.cpu_count()
+    return parallelize(n, function, args)
 
 def bold(string, color=white):
     return globals()['color'](string, color, True)
