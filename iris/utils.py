@@ -3,6 +3,7 @@
 
 """ """
 
+import os
 from functools import wraps
 import math
 import multiprocessing
@@ -11,6 +12,12 @@ import multiprocessing
 white,black,red,green,yellow,blue,purple = range(89,96)
 def color(string, color=green, bold=False):
     return '\033[%s%sm' % ('01;' if bold else '', color) + str(string) + '\033[0m'
+
+def bold(string, color=white):
+    return globals()['color'](string, color, True)
+
+def error(string):
+    print color('Error: ', red, True) + str(string)
 
 # the following code is from my gist here:
 #   http://gist.github.com/596073
@@ -44,8 +51,29 @@ def auto_parallelize(function, args):
     n = multiprocessing.cpu_count()
     return parallelize(n, function, args)
 
-def bold(string, color=white):
-    return globals()['color'](string, color, True)
+# returns all paths to filenames under a list of paths
+def recursive_walk(*paths):
+    ignore = set(['.git', '.svn', '.hg'])
+    visited_files = set()
+    visited_dirs = set()
+    for path in paths:
+        if os.path.isdir(path):
+            visited_dirs.add(path)
+            for root, dirs, files in os.walk(path):
+                pruned = []
+                for directory in dirs:
+                    d = os.path.join(root, directory)
+                    if d in visited_dirs:
+                        pruned.append(directory)
+                    if d in ignore:
+                        pruned.append(directory)
+                for d in pruned:
+                    dirs.remove(d)
+                for f in files:
+                    visited_files.add(os.path.join(root, f))
+        elif os.path.isfile(path):
+            visited_files.add(path)
+    return sorted(list(visited_files))
 
 def exclude_self(d):
     copy = dict(d)
@@ -71,9 +99,6 @@ def humansize(bytesize, persec=False):
     while bytesize /(reduce_factor**(oom+1)) >= 1:
         oom += 1
     return '%0.2f %s' % (bytesize/reduce_factor**oom, units[oom])
-
-def error(string):
-    print color('Error: ', red, True) + str(string)
 
 class OpenStruct(object):
     """Ruby style openstruct.  Implemented by myself millions of times."""
