@@ -81,13 +81,19 @@ class MetaData(object):
 
     def __init__(self, path):
         _metadata = pyexiv2.ImageMetadata(path)
+        UITException = UnknownImageTypeException('File at `%s` mangled or of unknown type (not an image?)' % path)
         try:
             _metadata.read()
         except IOError:
-            raise UnknownImageTypeException('File at "%s" has unknown type (not an image?)' % path)
+            raise UITException
         self._metadata = _metadata
         x,y = _metadata.dimensions
-        exif = self._exif()
+        # XXX: Canon Movie Thumbnails (.THM) seem to have valid EXIF metadata,
+        # but then choke the actual exif parser;  we should just ignore.
+        try:
+            exif = self._exif()
+        except pyexiv2.exif.ExifValueError:
+            raise UITException
         iptc = self._iptc()
         tags = extract_tags(exif, iptc)
         caption = extract_caption(exif, iptc)

@@ -32,11 +32,12 @@ class AddCommand(Command):
     def run(self, options, args):
         """Args here are a bunch of file or directory names.  We want to
         mostly defer to other functions that do the stuff for us."""
+        from iris import utils
+        paths = utils.recursive_walk(*args) if options.recursive else args
         if options.parallelize:
-            from iris import utils
-            utils.auto_parallelize(insert_photos, args)
+            utils.auto_parallelize(insert_photos, paths)
             return None
-        return insert_photos(args)
+        return insert_photos(paths)
 
 class TagCommand(Command):
     """Tag one or more photos.
@@ -73,9 +74,13 @@ class ListCommand(Command):
     def __init__(self):
         Command.__init__(self, "list", summary="list photos in iris")
         self.add_option('-v', '--verbose', action='count', help='increase verbosity')
+        self.add_option('-c', '--count', action='store_true', help='count files matching spec')
 
     def run(self, options, args):
         from iris import utils
+        if options.count:
+            print '%d photos' % backend.Photo.objects.find().count()
+            return
         photos = backend.Photo.objects.find(sort=[('path', backend.pymongo.ASCENDING)], paged=100)
         if options.verbose > 1:
             import pprint
@@ -118,11 +123,11 @@ class SyncCommand(Command):
 class FlushCommand(Command):
     def __init__(self):
         Command.__init__(self, 'flush', summary='flush iris\' database;  this cannot be reversed!')
-        self.add_option('-f', '--force', action='store_true', help='do not prompt')
+        self.add_option('-y', '--yes', action='store_true', help='do not prompt')
 
     def run(self, options, args):
         from iris import utils
-        if options.force:
+        if options.yes:
             backend.flush()
             return
         while True:
