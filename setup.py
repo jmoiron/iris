@@ -35,9 +35,8 @@ setup(
     include_package_data=True,
     zip_safe=False,
     test_suite="tests",
-    install_requires=[
-      # -*- Extra requirements: -*-
-    ],
+    # -*- Extra requirements: -*-
+    install_requires=['lepl', 'pymongo',],
     entry_points="""
     # -*- Entry points: -*-
     """,
