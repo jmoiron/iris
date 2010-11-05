@@ -6,7 +6,10 @@
 from setuptools import setup, find_packages
 import sys, os
 
-version = '0.1'
+try:
+    from iris import version
+except:
+    version = '0.1'
 
 # some trove classifiers:
 
