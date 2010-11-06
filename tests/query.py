@@ -11,6 +11,7 @@ ME = q.FullFirstMatchException
 class QueryParserTest(TestCase):
 
     def assertToken(self, token, type, name=None):
+        """Assert one token is of a type and, possibly, a value."""
         if type in(int, float, str, list):
             self.assertTrue(isinstance(token, type))
             if name:
@@ -25,6 +26,7 @@ class QueryParserTest(TestCase):
             self.assertToken(token, *format)
 
     def test_base_types(self):
+        """Test that strings, numbers, and lists behave."""
         t = q.number.parse('1')[0]
         self.assertToken(t, int, 1)
         t = q.number.parse('31230')[0]
@@ -66,13 +68,15 @@ class QueryParserTest(TestCase):
                 self.assertRaises(ME, eval(key).parse, (item))
 
     def test_field_list(self):
-        tokens = q.field_list.parse('(foo, bar, baz)')
+        """Test that 'field lists' behave (lists of fields, no values)."""
+        parse = q.field_list.parse
+        tokens = parse('(foo, bar, baz)')
         self.assertEquals(len(tokens), 1)
         tokens = tokens[0]
         self.assertEquals(len(tokens), 3)
         f = 'field'
         self.assertTokens(tokens, ([f,'foo'], [f,'bar'], [f,'baz']))
-        tokens = q.field_list.parse('(foo)')
+        tokens = parse('(foo)')
         self.assertEquals(len(tokens), 1)
         tokens = tokens[0]
         self.assertEquals(len(tokens), 1)
@@ -87,9 +91,12 @@ class QueryParserTest(TestCase):
             '()', # no empty field lists
         )
         for string in invalid_syntax:
-            self.assertRaises(ME , q.field_list.parse, (string))
+            self.assertRaises(ME , parse, (string))
 
     def test_where_clause(self):
+        """Make sure WHERE clauses work.  Note none of this can test that
+        the logic resultant from these WHERE clauses can make any sense,
+        just that they parse as syntactically correct."""
         parse = q.where_clause.parse
         string = lambda x: [basestring, x]
         field = lambda x: ['field', x]
@@ -105,3 +112,13 @@ class QueryParserTest(TestCase):
         self.assertEquals(len(tokens), 7)
         self.assertTokens(tokens, (field('foo'), ['in'], [list], ['and'], field('bar'), ['lt'], [int,300]))
         self.assertTokens(tokens[2], (string("italy"), string("portugal"), string("spain")))
+
+        invalid_syntax = (
+            '"foo" in ("italy", "portugal")', # "foo" not a field
+            'foo < "10"', # '<' is not valid string expr operator
+            'foo < ("10")', # '<' not valid list expr operator
+            '10 > 3', # first must be a field
+        )
+        for string in invalid_syntax:
+            self.assertRaises(ME, parse, (string))
+
