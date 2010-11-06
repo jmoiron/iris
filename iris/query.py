@@ -109,9 +109,9 @@ def numerify(x):
         return float(value)
 
 # types
-Alpha = lambda: Word(Upper() | Lower())
-AlphaNum = lambda: Word(Alpha() | Digit())
-InitialAlpha = lambda: Word(Alpha(), (AlphaNum() | Any("-_")))
+Alpha = Regexp('[a-zA-Z]+')
+AlphaNum = Regexp('[a-zA-Z0-9]+')
+InitialAlpha = Regexp('[a-zA-Z][-a-zA-Z0-9_]*')
 
 # tokens
 find    = Insensitive("find")               > token('find')
@@ -120,15 +120,18 @@ tag     = Insensitive("tag")                > token('tag')
 where   = Insensitive("where")              > token('where')
 AND     = Insensitive("and") | Literal("&")     > token('and')
 OR      = Insensitive("or")  | Literal("|")     > token('or')
-field   = InitialAlpha()    > token('field')
+field   = InitialAlpha    > token('field')
 comma   = Literal(",")
 eol     = Eos()
+
+def CommaSeparated(matcher, min=1):
+    return Drop("(") & matcher[min:, Separator(comma)] & Drop(")")
 
 # data types
 string  = String()
 number  = Float()           > numerify
 with DroppedSpace():
-    list_   = Drop("(") & (string | number)[1:, Separator(comma)] & Drop(")") > list
+    list_   = CommaSeparated(string | number) > list
 
 # operators
 in_oper = Insensitive("in")     > token('in')
@@ -145,7 +148,7 @@ list_operator   = in_oper
 
 # expressions
 with DroppedSpace():
-    field_list  = Drop("(") & field[1:, Separator(comma)] & Drop(")") > list
+    field_list  = CommaSeparated(field) > list
     num_expr    = number_operator & number
     string_expr = string_operator & string
     list_expr   = list_operator & list_
@@ -161,7 +164,17 @@ with DroppedSpace():
     tag_stmt    = tag & (string | list_) & where_expr
 
 statement = find_stmt | count_stmt | tag_stmt
+statement.config.no_full_first_match()
 statement.config.auto_memoize()
+
+ws = ~Whitespace()[:]
+# partials
+class Partials(object):
+    field_list = Literal("(") & field[1:, ws & Drop(",") & ws] & Literal(")")
+
+for key in Partials.__class__.__dict__:
+    try: getattr(Partials, key).config.no_full_first_match()
+    except: pass
 
 class CommandParser(cmd.Cmd):
     def __init__(self, *args, **kwargs):
@@ -214,6 +227,26 @@ class CommandParser(cmd.Cmd):
             print tokens
         except Exception, e:
             self._handle_stream_exception(e)
+
+    def _complete_field_list(self, text, line, unparsed):
+        """Handle completion of field lists.  Note that there are a finite
+        number of fields."""
+        fields = ('iso', 'tags', 'shutter', 'resolution', 'x', 'y', 'fstop', 'aperture')
+        if text in fields:
+            # if text is already completed from the fields, return the comma
+            return [', ']
+        return [f for f in fields if f.startswith(text)]
+
+    def complete_find(self, text, line, begidx, endidx):
+        if line.lower().strip() == 'find' and not text:
+            return ['<count>', '<field list>', 'WHERE']
+        toks = statement.parse(line)
+        if len(toks) == 1:
+            # if len is 1, we can have a number, field list, or "where" token;
+            field_list
+
+        print toks
+        #print '[[', text, line, begidx, endidx, ']]'
 
     def do_count(self, params):
         try:
