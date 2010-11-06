@@ -93,13 +93,12 @@ def Insensitive(string):
     """A case insensitive literal."""
     return Regexp(re.compile(string, re.I))
 
+ws = ~Whitespace()[:]
+
 def Separator(matcher, drop=True):
     if drop:
-        return Drop(Whitespace()[:]) & Drop(matcher) & Drop(Whitespace()[:])
-    return Drop(Whitespace())[:] & matcher & Drop(Whitespace())[:]
-
-def fold(func):
-    return lambda x: func(x[0])
+        return ws & Drop(matcher) & ws
+    return ws & matcher & ws
 
 def numerify(x):
     value = x[0]
@@ -167,7 +166,6 @@ statement = find_stmt | count_stmt | tag_stmt
 statement.config.no_full_first_match()
 statement.config.auto_memoize()
 
-ws = ~Whitespace()[:]
 # partials
 class Partials(object):
     field_list = Literal("(") & field[1:, ws & Drop(",") & ws] & Literal(")")
