@@ -93,6 +93,11 @@ def Insensitive(string):
     """A case insensitive literal."""
     return Regexp(re.compile(string, re.I))
 
+def Separator(matcher, drop=True):
+    if drop:
+        return Drop(Whitespace()[:]) & Drop(matcher) & Drop(Whitespace()[:])
+    return Drop(Whitespace())[:] & matcher & Drop(Whitespace())[:]
+
 def fold(func):
     return lambda x: func(x[0])
 
@@ -116,13 +121,14 @@ where   = Insensitive("where")              > token('where')
 AND     = Insensitive("and") | Literal("&")     > token('and')
 OR      = Insensitive("or")  | Literal("|")     > token('or')
 field   = InitialAlpha()    > token('field')
+comma   = Literal(",")
 eol     = Eos()
 
 # data types
-string  = SingleLineString() | SingleLineString(quote="'")
+string  = String()
 number  = Float()           > numerify
 with DroppedSpace():
-    list_   = Drop("(") & (string | number)[0:, Drop(Whitespace() | ",")[1:]] & Drop(")") > list
+    list_   = Drop("(") & (string | number)[1:, Separator(comma)] & Drop(")") > list
 
 # operators
 in_oper = Insensitive("in")     > token('in')
@@ -139,13 +145,12 @@ list_operator   = in_oper
 
 # expressions
 with DroppedSpace():
-    field_list  = Drop("(") & field[1:, Drop(Whitespace() | ",")[1:]] & Drop(")") > list
+    field_list  = Drop("(") & field[1:, Separator(comma)] & Drop(")") > list
     num_expr    = number_operator & number
     string_expr = string_operator & string
     list_expr   = list_operator & list_
     logic_expr  = field & (num_expr | string_expr | list_expr)
-    combin_expr = Drop(Whitespace())[:] & (AND | OR) & Drop(Whitespace())[:]
-    where_clause = logic_expr[1:, combin_expr]
+    where_clause = logic_expr[1:, Separator(AND | OR, drop=False)]
     where_expr  = where & where_clause
     where_expr.config.auto_memoize()
 
