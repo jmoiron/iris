@@ -174,6 +174,12 @@ for key in Partials.__class__.__dict__:
     try: getattr(Partials, key).config.no_full_first_match()
     except: pass
 
+def dbg(func):
+    def wrapped(*args):
+        print '<<%s: %s>>' % (func.__name__, '::'.join(args))
+        return func(*args)
+    return wrapped
+
 class CommandParser(cmd.Cmd):
     def __init__(self, *args, **kwargs):
         # stupid non-newstyle classes in stdlib
@@ -226,22 +232,46 @@ class CommandParser(cmd.Cmd):
         except Exception, e:
             self._handle_stream_exception(e)
 
-    def _complete_field_list(self, text, line, unparsed):
+    def _complete_field_list(self, text, line, remainder):
         """Handle completion of field lists.  Note that there are a finite
         number of fields."""
-        fields = ('iso', 'tags', 'shutter', 'resolution', 'x', 'y', 'fstop', 'aperture')
+        fields = ['iso', 'tags', 'shutter', 'resolution', 'x', 'y', 'fstop', 'aperture']
+        # if text is already completed from the fields, return the comma
         if text in fields:
-            # if text is already completed from the fields, return the comma
-            return [', ']
-        return [f for f in fields if f.startswith(text)]
+            return [text+', ']
+        if remainder[-1] == ',':
+            return [' ']
+        term = text.split(',')[-1].strip()
+        if remainder[-1].isalnum():
+            return [f for f in fields if f.startswith(term)] if term else f
+        if not term.strip():
+            return fields
+            #return [f for f in fields if f not in map(str.strip, remainder.split(','))]
+
+    def _complete_cfl_or_where(self, text, line, remainder):
+        if '(' in remainder:
+            return self._complete_field_list(text, line, remainder)
+        if text and not remainder and text[-1].isnum():
+            return [None] 
+        return self._complete_where(text, line, remainder)
+
+    def _complete_where(self, text, line, remainder):
+        if not remainder:
+            return ['where']
+        return [x for x in ['where', 'WHERE'] if x.startswith(remainder)]
 
     def complete_find(self, text, line, begidx, endidx):
         if line.lower().strip() == 'find' and not text:
             return ['<count>', '<field list>', 'WHERE']
-        toks = statement.parse(line)
+        toks, state = statement.match(line).next()
+        remainder = state.text
         if len(toks) == 1:
-            # if len is 1, we can have a number, field list, or "where" token;
-            field_list
+            return self._complete_cfl_or_where(text, line, remainder)
+        if len(toks) == 2:
+            if isinstance(toks[1], int):
+                return self._complete_cfl_or_where(text, line, remainder)
+            else:
+                return self._complete_where(text, line, remainder)
 
         print toks
         #print '[[', text, line, begidx, endidx, ']]'
