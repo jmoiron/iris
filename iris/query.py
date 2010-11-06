@@ -71,23 +71,28 @@ import logging
 logger = logging.getLogger("lepl")
 logger.setLevel(logging.CRITICAL)
 
-class Token(object):
+class IrisToken(object):
     tokens = ('find', 'count', 'tag', 'where', 'and', 'or', 'in')
     def __init__(self, type, value):
         self.type = type.lower()
         self.value = value[0] if isinstance(value, list) else value
 
+    def is_field(self): return self.type == 'field'
+    def is_ws(self): return self.type == 'whitespace'
+    def is_unk(self): return self.type == 'unknown'
     def __repr__(self):
         if self.type in self.tokens:
             return '<%s>' % self.type
         if self.type == 'field':
             return '<:%s>' % self.value
         return '<%s (%r)>' % (self.type, self.value)
+    def __eq__(self, other):
+        return self.value == other
     def __str__(self): return str(self.value)
 
 def token(name):
     """Generates a function that returns a curried token."""
-    return lambda value: Token(name, value)
+    return lambda value: IrisToken(name, value)
 
 def Insensitive(string):
     """A case insensitive literal."""
@@ -144,6 +149,7 @@ gte     = Literal(">=")         > token('gte')
 number_operator = dblequal | equal | lte | gte | lt | gt
 string_operator = in_oper | equal | dblequal
 list_operator   = in_oper
+operator = in_oper | number_operator
 
 # expressions
 with DroppedSpace():
@@ -156,6 +162,8 @@ with DroppedSpace():
     where_expr  = where & where_clause
     where_expr.config.auto_memoize()
 
+unknown = Regexp('.+')  > token('unknown')
+
 # statements
 with DroppedSpace():
     find_stmt   = find & number[:1] & field_list[:1] & where_expr[:]
@@ -166,12 +174,21 @@ statement = find_stmt | count_stmt | tag_stmt
 statement.config.no_full_first_match()
 statement.config.auto_memoize()
 
-# partials
-class Partials(object):
-    field_list = Literal("(") & field[1:, ws & Drop(",") & ws] & Literal(")")
+lstring = String()   > token('string')
+lnum  = Float()      > token('number')
+lws   = Whitespace() > token('whitespace')
+lLiteral = lambda x: Literal(x) > token('literal')
 
-for key in Partials.__class__.__dict__:
-    try: getattr(Partials, key).config.no_full_first_match()
+class Lexers(object):
+    """These semantically void matchers will match any valid (and many
+    invalid) forms for their respective types.  They're used by the
+    Completers to figure out what to do."""
+    with DroppedSpace():
+        FieldList = lLiteral("(") & ( field | comma | lws | lLiteral(")"))[:]
+        WhereClause = field & (operator | lstring | lnum | list_ | AND | OR | lws | unknown)[:]
+
+for key in Lexers.__class__.__dict__:
+    try: getattr(Lexers, key).config.no_full_first_match()
     except: pass
 
 def dbg(func):
@@ -179,6 +196,82 @@ def dbg(func):
         print '<<%s: %s>>' % (func.__name__, '::'.join(args))
         return func(*args)
     return wrapped
+
+def print_exceptions(func):
+    def wrapped(*args):
+        try: return func(*args)
+        except:
+            import traceback
+            print ''
+            traceback.print_exc()
+    return wrapped
+
+class FieldListCompleter(object):
+    """Tab completer for field lists.  Note that the 'line' here should
+    start earliest at '(', and in general it will ignore "text" and use
+    its own lexer instead."""
+    default = ['iso', 'tags', 'shutter', 'resolution', 'x', 'y', 'fstop', 'aperture']
+    def __init__(self, line):
+        self.line = line
+        try: self.tokens = Lexers.FieldList.parse(line)
+        except: self.tokens = None
+
+    def complete(self):
+        if not self.tokens: return []
+        text_tokens = [t for t in self.tokens if str(t).strip()]
+        final = text_tokens[-1]
+        final_ws = self.tokens[-1].is_ws()
+        if final == '(':
+            return self.default
+        if final == ',':
+            if final_ws:
+                return self.default
+            return [' ']
+        if final.is_field():
+            #print '\n%r (%s)' % (self.tokens, 'ws' if final_ws else 'not ws')
+            if str(final) in self.default and not final_ws:
+                return [str(final)+', ']
+            elif str(final) in self.default and final_ws:
+                return [')']
+            return [f for f in self.default if f.startswith(str(final))]
+        return self.default
+
+class WhereCompleter(object):
+    def __init__(self, line):
+        self.line = line
+
+    def complete(self):
+        if not self.line: return ['where']
+        return [x for x in ['where', 'WHERE'] if x.startswith(self.line)]
+
+class FindCompleter(object):
+    """Tab completer for the 'find' command."""
+    def __init__(self, text, line):
+        self.text = text
+        self.line = line
+        self.toks, self.state = statement.match(line).next()
+        self.remainder = self.state.text
+
+    def complete(self):
+        default = ['<count>', '<field list>', 'WHERE']
+        if len(self.toks) == 1:
+            if not self.remainder.strip():
+                return default
+            return FieldListCompleter(self.remainder).complete() or\
+                    WhereCompleter(self.remainder).complete()
+        if len(self.toks) == 2:
+            if isinstance(self.toks[1], int):
+                if not self.remainder and self.line[-1].isdigit():
+                    return [str(self.toks[1])+' ']
+                elif not self.remainder:
+                    return [d for d in default if d != '<count>']
+                return FieldListCompleter(self.remainder).complete() or\
+                        WhereCompleter(self.remainder).complete()
+            else: # it's a field list i guess
+                return WhereCompleter(self.remainder).complete()
+        if len(self.toks) == 3:
+            return WhereCompleter(self.remainder).complete()
+
 
 class CommandParser(cmd.Cmd):
     def __init__(self, *args, **kwargs):
@@ -225,72 +318,25 @@ class CommandParser(cmd.Cmd):
         print s + bold(e.stream.location[3], white)
         print ' '*slen + ' '*e.stream.character_offset + bold("^", red)
 
-    def do_find(self, params):
+    def _do_statement(self, params, stmt, name):
         try:
-            tokens = find_stmt.parse('find ' + params)
+            tokens = stmt.parse(name + ' ' + params)
             print tokens
         except Exception, e:
             self._handle_stream_exception(e)
 
-    def _complete_field_list(self, text, line, remainder):
-        """Handle completion of field lists.  Note that there are a finite
-        number of fields."""
-        fields = ['iso', 'tags', 'shutter', 'resolution', 'x', 'y', 'fstop', 'aperture']
-        # if text is already completed from the fields, return the comma
-        if text in fields:
-            return [text+', ']
-        if remainder[-1] == ',':
-            return [' ']
-        term = text.split(',')[-1].strip()
-        if remainder[-1].isalnum():
-            return [f for f in fields if f.startswith(term)] if term else f
-        if not term.strip():
-            return fields
-            #return [f for f in fields if f not in map(str.strip, remainder.split(','))]
+    def do_find(self, params):
+        self._do_statement(params, find_stmt, 'find')
 
-    def _complete_cfl_or_where(self, text, line, remainder):
-        if '(' in remainder:
-            return self._complete_field_list(text, line, remainder)
-        if text and not remainder and text[-1].isnum():
-            return [None] 
-        return self._complete_where(text, line, remainder)
-
-    def _complete_where(self, text, line, remainder):
-        if not remainder:
-            return ['where']
-        return [x for x in ['where', 'WHERE'] if x.startswith(remainder)]
-
-    def complete_find(self, text, line, begidx, endidx):
-        if line.lower().strip() == 'find' and not text:
-            return ['<count>', '<field list>', 'WHERE']
-        toks, state = statement.match(line).next()
-        remainder = state.text
-        if len(toks) == 1:
-            return self._complete_cfl_or_where(text, line, remainder)
-        if len(toks) == 2:
-            if isinstance(toks[1], int):
-                return self._complete_cfl_or_where(text, line, remainder)
-            else:
-                return self._complete_where(text, line, remainder)
-
-        print toks
-        #print '[[', text, line, begidx, endidx, ']]'
+    @print_exceptions
+    def complete_find(self, text, line, *args):
+        return FindCompleter(text, line).complete()
 
     def do_count(self, params):
-        try:
-            tokens = count_stmt.parse('count ' + params)
-            print tokens
-        except Exception, e:
-            self._handle_stream_exception(e)
+        self._do_statement(params, count_stmt, 'count')
 
     def do_tag(self, params):
-        try:
-            tokens = count_stmt.parse('tag ' + params)
-            print tokens
-        except Exception, e:
-            self._handle_stream_exception(e)
-
-        print params
+        self._do_statement(params, tag_stmt, 'tag')
 
 def prompt():
     parser = CommandParser()
@@ -301,5 +347,6 @@ def query(q):
     return CommandParser().onecmd(q)
 
 if __name__ == '__main__':
-    prompt()
+    try: prompt()
+    except KeyboardInterrupt: print
 
