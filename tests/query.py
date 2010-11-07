@@ -122,3 +122,45 @@ class QueryParserTest(TestCase):
         for string in invalid_syntax:
             self.assertRaises(ME, parse, (string))
 
+    def test_find_statement(self):
+        """Test that find statements work."""
+        parse = q.find_stmt.parse
+        valid_wheres = (
+            'iso < 200',
+            'iso > 100 and tag in ("italy", "portugal", "spain")',
+            'aperture > 2.3 or shutter < 0.1'
+        )
+        valid_stmts = (
+            'find 10 where %s',
+            'find 10 (path, iso) where %s',
+            'find (path,iso)',
+            'find (path, iso) where %s',
+            'find where %s',
+            'find',
+        )
+        where_lengths = (3, 7, 7)
+        stmt_lengths = (3, 4, 2, 3, 2, 1)
+        def test_tokens(index, tokens):
+            if index == 0:
+                self.assertTokens(tokens[:3], (['find'], (int,10), ['where']))
+            elif index == 1:
+                self.assertTokens(tokens[:4], (['find'], (int,10), [list], ['where']))
+            elif index == 2:
+                self.assertTokens(tokens[:2], (['find'], [list]))
+            elif index == 3:
+                self.assertTokens(tokens[:3], (['find'], [list], ['where']))
+            elif index == 4:
+                self.assertTokens(tokens[:2], (['find'], ['where']))
+            elif index == 5:
+                self.assertTokens(tokens, (['find'],))
+
+        for i,stmt in enumerate(valid_stmts):
+            if '%s' in stmt:
+                for j,w in enumerate(valid_wheres):
+                    tokens = parse(stmt % w)
+                    self.assertEquals(len(tokens), where_lengths[j] + stmt_lengths[i])
+            else:
+                tokens = parse(stmt)
+            test_tokens(i, tokens)
+
+
