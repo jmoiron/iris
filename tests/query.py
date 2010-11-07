@@ -4,7 +4,7 @@
 """iris query tests."""
 
 from unittest import TestCase
-from iris import query as q
+from iris.query import parser as q
 
 ME = q.FullFirstMatchException
 
