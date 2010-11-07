@@ -1,0 +1,54 @@
+# vim: set ft=sh
+# -*- coding: utf-8 -*-
+#
+# A BNF-style language definition for Iris' query language.
+# For help on reading BNF (this is just BNF-ish), see wikipedia:
+#   http://en.wikipedia.org/wiki/Backus-Naur_Form
+
+# token types
+alpha           ::= { a..z | A..Z }
+num             ::= { 0..9 }
+alphanum        ::= { alpha | num }
+initialalpha    ::= alpha { alphanum }
+ws              ::= "\s"
+
+# keywords
+find    ::= "find"
+count   ::= "count"
+where   ::= "where"
+tag     ::= "tag"
+add     ::= "add"
+EOL     ::= "\n"
+
+# data types
+string  ::= '"' { <alphanum> | <ws> } '"'
+number  ::= { <num> } [ "." { <num> }]
+list    ::= "(" ( string | number ) { "," ( string | number ) } ")"
+field   ::= initialalpha
+literal ::= ( string | number | list )
+
+
+# operators
+equal       ::= "="           # implied '*foo*' for strings
+doubleequal ::= "=="    # precisely equal
+lt          ::= "<"
+gt          ::= ">"
+lte         ::= lt equal
+gte         ::= gt equal
+in          ::= "in"
+and         ::= (and | &)
+or          ::= (or | "|")
+comps       ::= ( equal | doubleequal | lt | gt | gte | lte )
+
+# expressions
+field_list      ::= "(" field { "," field} ")"
+comp_expr       ::= field comps literal
+in_expr         ::= field in list
+where_clause    ::= where ( comp_expr | in_expr ) [ { (and | or) (comparison | in_expr ) } ]
+
+# statements
+find_stmt   ::= find [number] [field_list] [where_clause] EOL
+count_stmt  ::= count [where_clause] EOL
+tag_stmt    ::= tag string where_clause EOL
+add_stmt    ::= add [string] { string }
+
