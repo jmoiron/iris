@@ -94,9 +94,11 @@ class QueryParserTest(TestCase):
             self.assertRaises(ME , parse, (string))
 
     def test_where_clause(self):
-        """Make sure WHERE clauses work.  Note none of this can test that
-        the logic resultant from these WHERE clauses can make any sense,
-        just that they parse as syntactically correct."""
+        """Make sure WHERE clauses work.
+
+        Note none of this can test that the logic resultant from these WHERE
+        clauses can make any sense, just that they parse as syntactically
+        correct."""
         parse = q.where_clause.parse
         string = lambda x: [basestring, x]
         field = lambda x: ['field', x]

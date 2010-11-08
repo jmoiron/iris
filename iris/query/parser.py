@@ -70,9 +70,6 @@ AND     = Insensitive("and") | Literal("&") > token('and')
 OR      = Insensitive("or")  | Literal("|") > token('or')
 field   = InitialAlpha                      > token('field')
 
-# special tokens
-unknown = Regexp('.+')                      > token('unknown')
-
 # data types
 string  = String()
 number  = Float()                           > numerify
