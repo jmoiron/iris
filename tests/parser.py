@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""iris query tests."""
+"""iris query parser tests."""
 
 from unittest import TestCase
 from iris.query import parser as q
 
 ME = q.FullFirstMatchException
 
-class QueryParserTest(TestCase):
-
+class TokenTestCase(TestCase):
+    """Like a regular TestCase, but with some extra asserts."""
     def assertToken(self, token, type, name=None):
         """Assert one token is of a type and, possibly, a value."""
         if type in(int, float, str, list):
@@ -24,6 +24,8 @@ class QueryParserTest(TestCase):
         """Asserts a bunch of tokens at a time."""
         for format, token in zip(formats, tokens):
             self.assertToken(token, *format)
+
+class QueryParserTest(TokenTestCase):
 
     def test_base_types(self):
         """Test that strings, numbers, and lists behave."""
@@ -164,5 +166,47 @@ class QueryParserTest(TestCase):
             else:
                 tokens = parse(stmt)
             test_tokens(i, tokens)
+
+
+class FindStatementTest(TokenTestCase):
+    def assertStatement(self, statement, count, field_len, spec):
+        self.assertEquals(statement.count, count)
+        self.assertEquals(len(statement.fields), field_len)
+        self.assertEquals(statement.spec, spec)
+
+    def test_basic_queries(self):
+        find = q.FindStatement("find")
+        self.assertStatement(find, 0, 0, {})
+        find = q.FindStatement("find 10")
+        self.assertStatement(find, 10, 0, {})
+        find = q.FindStatement("find (iso, path, aperture)")
+        self.assertStatement(find, 0, 3, {})
+        find = q.FindStatement("find 15 (iso)")
+        self.assertStatement(find, 15, 1, {})
+
+    def test_where_queries(self):
+        find = q.FindStatement("find 10 (iso, path) where iso <= 400")
+        self.assertStatement(find, 10, 2, {'iso' : {'$lte':400}})
+        self.assertEquals(find.fields, ['iso', 'path'])
+        self.assertEquals(len(find.queries), 1)
+        self.assertTokens(find.queries[0], ([str, 'iso'], ['lte'], [int, 400]))
+        find = q.FindStatement("find 10 where iso < 200")
+        self.assertStatement(find, 10, 0, {'iso' : {'$lt':200}})
+        find = q.FindStatement("find where shutter > 0.5")
+        self.assertStatement(find, 0, 0, {'shutter':{'$gt':0.5}})
+        find = q.FindStatement('find where caption = "hello world"')
+        self.assertStatement(find, 0, 0, {'caption' : 'hello world'})
+        find = q.FindStatement('find where tags in ("italy", "portugal")')
+        self.assertStatement(find, 0, 0, {'tags' : {'$in':['italy', 'portugal']}})
+
+    def test_and_queries(self):
+        find = q.FindStatement('find 5 where iso < 200 and tags in ("italy", "portugal")')
+        self.assertStatement(find, 5, 0, {'iso':{'$lt':200}, 'tags':{'$in':['italy','portugal']}})
+        find = q.FindStatement("find where iso < 200 and iso >= 100")
+        self.assertStatement(find, 0, 0, {'iso':{'$lt':200,'$gte':100}})
+
+    def test_or_queries(self):
+        find = q.FindStatement('find 10 (iso) where iso > 200 or tags in ("italy")')
+        self.assertStatement(find, 10, 1, {'$or' : [{'iso':{'$gt':200}}, {'tags': {'$in':['italy']}}]})
 
 

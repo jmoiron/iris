@@ -5,6 +5,7 @@
 query language, check ``iris/query/language.bnf``."""
 
 import re
+from functools import wraps
 from lepl import *
 
 # make lepl's logging behave
@@ -114,3 +115,72 @@ statement.config.auto_memoize()
 def parse_statement(string):
     return statement.parse(string)
 
+def token_parser(func):
+    @wraps(func)
+    def wrapped(*args):
+        try:
+            func(*args)
+        except StopIteration:
+            return
+    return wrapped
+
+class FindStatement(object):
+    def __init__(self, query):
+        if isinstance(query, basestring):
+            query = find_stmt.parse(query)
+        self.tokens = query
+        # these False values will be taken to mean 'all'
+        self.count = 0
+        self.fields = tuple()
+        self.spec = {}
+        self.queries = []
+        self._query_args()
+        self.spec = self._make_spec()
+
+    @token_parser
+    def _query_args(self):
+        """Generate mongo arguments for this statement."""
+        tokens = list(self.tokens)
+        iterator = iter(tokens)
+        eat = iterator.next
+        find = eat()
+        assert find == 'find'
+        next = eat()
+        if isinstance(next, int):
+            self.count = next
+            next = eat()
+        if isinstance(next, list):
+            self.fields = map(str, next)
+            next = eat()
+        assert next == 'where'
+        while True:
+            next = eat()
+            field = str(next)
+            operator = eat()
+            value = eat()
+            self.queries.append((field, operator, value))
+            next = eat()
+            self.queries.append(next)
+
+    def _make_spec(self):
+        specs = [{}]
+        spec_index = 0
+        for query in self.queries:
+            spec = specs[spec_index]
+            if not isinstance(query, tuple):
+                if query == 'or':
+                    spec_index += 1
+                    specs.append({})
+                continue
+            key, operator, value = query
+            if operator.type == 'equal':
+                spec[key] = value
+            if operator.type == 'dblequal':
+                spec[key] = { '$regex' : '.*%s.*' % value }
+            elif operator.type in ('lt', 'lte', 'gt', 'gte', 'in'):
+                spec.setdefault(key, {}).update({ '$%s' % operator.type : value })
+        # collapse the specs into an or statement
+        if len(specs) == 1:
+            return specs[0]
+        else:
+            return {'$or' : specs}
