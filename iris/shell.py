@@ -80,12 +80,16 @@ class CommandParser(cmd.Cmd):
     def _do_statement(self, params, stmt, name):
         try:
             tokens = stmt.parse(name + ' ' + params)
-            print tokens
+            return tokens
         except Exception, e:
             self._handle_stream_exception(e)
 
     def do_find(self, params):
-        self._do_statement(params, find_stmt, 'find')
+        tokens = self._do_statement(params, parser.find_stmt, 'find')
+        if not tokens:
+            return
+        query = parser.FindStatement(tokens)
+        print query.spec
 
     @print_exceptions
     def complete_find(self, text, line, *args):
