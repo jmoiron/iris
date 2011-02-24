@@ -10,6 +10,7 @@ language syntax, so extra code must be written to do so.
 
 See also, some interesting notes on implementing various types of simple
 command grammars using gnu/readline & python:
+
     https://www.ironalbatross.net/wiki/index.php5?title=Python_Readline_Completions
     https://www.ironalbatross.net/wiki/index.php5?title=Python_Cmd_Completions
 """
@@ -22,7 +23,7 @@ class FindStatement(object):
     def __init__(self, text, line):
         self.text = text
         self.line = line
-        self.toks, self.state = statement.match(line).next()
+        self.toks, self.state = parser.statement.match(line).next()
         self.remainder = self.state.text
 
     def complete(self):
@@ -52,7 +53,7 @@ class FieldListCompleter(object):
     default = ['iso', 'tags', 'shutter', 'resolution', 'x', 'y', 'fstop', 'aperture']
     def __init__(self, line):
         self.line = line
-        try: self.tokens = Lexers.FieldList.parse(line)
+        try: self.tokens = lexer.field_list.parse(line)
         except: self.tokens = None
 
     def complete(self):
