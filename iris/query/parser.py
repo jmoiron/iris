@@ -73,7 +73,7 @@ field   = InitialAlpha                      > token('field')
 
 # data types
 string  = String()
-number  = Float()                           > numerify
+number  = Real()                            > numerify
 list_   = CommaSeparated(string | number)   > list
 
 # operators

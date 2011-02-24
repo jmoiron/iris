@@ -42,7 +42,7 @@ andor           = Insensitive('(and)|(or)')         > token('operator')
 field           = Regexp('[a-zA-Z][-a-zA-Z0-9_]*')  > token('field')
 unknown         = Regexp('.+')                      > token('unknown')
 string          = String()                          > token('string')
-num             = Float()                           > token('number')
+num             = Real()                            > token('number')
 ws              = Whitespace()                      > token('whitespace')
 
 # The lexers are basically (first token) & ( any | other | valid | tokens )
