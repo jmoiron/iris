@@ -208,5 +208,7 @@ class FindStatementTest(TokenTestCase):
     def test_or_queries(self):
         find = q.FindStatement('find 10 (iso) where iso > 200 or tags in ("italy")')
         self.assertStatement(find, 10, 1, {'$or' : [{'iso':{'$gt':200}}, {'tags': {'$in':['italy']}}]})
+        find = q.FindStatement('find 10 (iso) where iso > 200 OR tags in ("italy")')
+        self.assertStatement(find, 10, 1, {'$or' : [{'iso':{'$gt':200}}, {'tags': {'$in':['italy']}}]})
 
 

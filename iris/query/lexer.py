@@ -15,6 +15,8 @@ class LexerToken(object):
     def __init__(self, type, value):
         self.type = type.lower()
         self.value = value[0] if isinstance(value, list) else value
+        if self.type == 'operator':
+            self.value = self.value.lower()
 
     def is_field(self): return self.type == 'field'
     def is_ws(self): return self.type == 'whitespace'
