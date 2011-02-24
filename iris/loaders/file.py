@@ -6,7 +6,7 @@
 import datetime
 
 import pyexiv2
-from pyexiv2.utils import Rational, GPSCoordinate
+from pyexiv2.utils import Rational, GPSCoordinate, Fraction
 
 from iris import utils
 
@@ -20,7 +20,7 @@ def exiv_serialize(key, value):
     """EXIF saves a lot of data as fractions.  We want to smartly undo
     that where it makes sense, or to a string "num/denom" where that
     makes sense."""
-    examine_types = (Rational, GPSCoordinate, list, datetime.date, datetime.time)
+    examine_types = (Rational, GPSCoordinate, list, datetime.date, datetime.time, Fraction)
     if not isinstance(value, examine_types):
         if isinstance(value, basestring) and '\x00' in value:
             return '(bin)'
@@ -47,7 +47,7 @@ def exiv_serialize(key, value):
         'FNumber' : '%0.1f',
     }
 
-    if key in fraction_keys:
+    if key in fraction_keys or isinstance(value, Fraction):
         return "%s/%s" % (value.numerator, value.denominator)
     if key in float_keys:
         format = float_keys[key]
