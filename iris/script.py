@@ -115,9 +115,9 @@ class SyncCommand(Command):
                 photo.save()
                 log('%s [%s]' % (photo.path, utils.bold('e', color=utils.red)))
                 continue
-            if hasattr(photo, 'moved'):
-                delattr(photo, 'moved')
-            photo.sync()
+            if photo.moved:
+                photo.moved = None
+            #photo.sync()
             log('%s' % photo.path)
 
 class FlushCommand(Command):
@@ -161,6 +161,7 @@ def run_with_timer(command, options, args):
     return ret
 
 def main():
+    import utils
     import pymongo
     parser = CommandParser()
     parser.add_option('', '--profile', action='store_true', help='profile the running command')
