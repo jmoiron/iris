@@ -142,7 +142,13 @@ class Statement(object):
             pass
         return queries
 
-    def make_spec(self):
+    @property
+    def spec(self):
+        """Create a mongo spec from the parsed tokens of the current query."""
+        if getattr(self, '_spec', None):
+            return self._spec
+        if not self.parsed:
+            self.parse()
         specs = [{}]
         spec_index = 0
         for query in self.queries:
@@ -161,23 +167,21 @@ class Statement(object):
                 spec.setdefault(key, {}).update({ '$%s' % operator.type : value })
         # collapse the specs into an or statement
         if len(specs) == 1:
-            return specs[0]
+            self._spec = specs[0]
         else:
-            return {'$or' : specs}
-
+            self._spec = {'$or' : specs}
+        return self._spec
 
 class CountStatement(Statement):
     def __init__(self, query):
         if isinstance(query, basestring):
             query = count_stmt.parse(query)
         self.tokens = query
-        self.spec = {}
         self.queries = []
-        self._query_args()
-        self.spec = self.make_spec()
-    
+        self.parsed = False
+
     @token_parser
-    def _query_args(self):
+    def parse(self):
         """Generate mongo arguments for this statement."""
         eat = iter(list(self.tokens)).next
         count = eat()
@@ -185,8 +189,9 @@ class CountStatement(Statement):
         next = eat()
         assert next == 'where'
         self.queries = self.parse_where_tokens(eat)
+        self.parsed = True
 
-class FindStatement(object):
+class FindStatement(Statement):
     def __init__(self, query):
         if isinstance(query, basestring):
             query = find_stmt.parse(query)
@@ -194,13 +199,11 @@ class FindStatement(object):
         # these False values will be taken to mean 'all'
         self.count = 0
         self.fields = tuple()
-        self.spec = {}
         self.queries = []
-        self._query_args()
-        self.spec = self.make_spec()
+        self.parsed = False
 
     @token_parser
-    def _query_args(self):
+    def parse(self):
         """Generate mongo arguments for this statement."""
         tokens = list(self.tokens)
         iterator = iter(tokens)
@@ -216,4 +219,5 @@ class FindStatement(object):
             next = eat()
         assert next == 'where'
         self.queries = self.parse_where_tokens(eat)
+        self.parsed = True
 

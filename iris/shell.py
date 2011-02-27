@@ -10,8 +10,8 @@ import readline
 import cmd
 
 from iris import version
+from iris import backend
 from iris.utils import color, bold, white, green, red
-
 from iris.query import parser, completion
 
 import logging
@@ -33,6 +33,16 @@ def print_exceptions(func):
             print ''
             traceback.print_exc()
     return wrapped
+
+# --- perform queries based on various parsed statements
+
+def find(query):
+    """Perform a 'find' based on a shell query."""
+    if isinstance(query, basestring):
+        query = parser.FindStatement(query)
+    spec = query.spec
+    photos = backend.Photo.objects.find(spec, limit=query.count)
+    return photos
 
 class CommandParser(cmd.Cmd):
     def __init__(self, *args, **kwargs):
@@ -89,7 +99,8 @@ class CommandParser(cmd.Cmd):
         if not tokens:
             return
         query = parser.FindStatement(tokens)
-        print query.spec
+        for photo in find(query):
+            print photo
 
     @print_exceptions
     def complete_find(self, text, line, *args):
