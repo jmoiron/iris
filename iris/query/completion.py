@@ -18,6 +18,22 @@ command grammars using gnu/readline & python:
 from iris.query import lexer
 from iris.query import parser
 
+class CountStatement(object):
+    """Tab completer for the 'count' command."""
+    def __init__(self, text, line):
+        self.text = text
+        self.line = line
+        self.toks, self.state = parser.statement.match(line).next()
+        self.remainder = self.state.text
+
+    def complete(self):
+        default = ['WHERE']
+        if len(self.toks) == 1:
+            if not self.remainder.strip():
+                return default
+        return WhereCompleter(self.remainder).complete()
+
+
 class FindStatement(object):
     """Tab completer for the 'find' command."""
     def __init__(self, text, line):

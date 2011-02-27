@@ -95,8 +95,16 @@ class CommandParser(cmd.Cmd):
     def complete_find(self, text, line, *args):
         return completion.FindStatement(text, line).complete()
 
+    @print_exceptions
+    def complete_count(self, text, line, *args):
+        return completion.CountStatement(text, line).complete()
+
     def do_count(self, params):
-        self._do_statement(params, count_stmt, 'count')
+        tokens = self._do_statement(params, parser.count_stmt, 'count')
+        if not tokens:
+            return
+        query = parser.CountStatement(tokens)
+        print query.spec
 
     def do_tag(self, params):
         self._do_statement(params, tag_stmt, 'tag')

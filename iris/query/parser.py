@@ -126,45 +126,23 @@ def token_parser(func):
             return
     return wrapped
 
-class FindStatement(object):
-    def __init__(self, query):
-        if isinstance(query, basestring):
-            query = find_stmt.parse(query)
-        self.tokens = query
-        # these False values will be taken to mean 'all'
-        self.count = 0
-        self.fields = tuple()
-        self.spec = {}
-        self.queries = []
-        self._query_args()
-        self.spec = self._make_spec()
+class Statement(object):
 
-    @token_parser
-    def _query_args(self):
-        """Generate mongo arguments for this statement."""
-        tokens = list(self.tokens)
-        iterator = iter(tokens)
-        eat = iterator.next
-        find = eat()
-        assert find == 'find'
-        next = eat()
-        if isinstance(next, int):
-            self.count = next
-            next = eat()
-        if isinstance(next, list):
-            self.fields = map(str, next)
-            next = eat()
-        assert next == 'where'
-        while True:
-            next = eat()
-            field = str(next)
-            operator = eat()
-            value = eat()
-            self.queries.append((field, operator, value))
-            next = eat()
-            self.queries.append(next)
+    def parse_where_tokens(self, iterator):
+        """Given an iterator, parse out the remaining where statements."""
+        queries = []
+        try:
+            while True:
+                field, operator, value = iterator(), iterator(), iterator()
+                field = str(field)
+                queries.append((field, operator, value))
+                join_operator = iterator()
+                queries.append(join_operator)
+        except StopIteration:
+            pass
+        return queries
 
-    def _make_spec(self):
+    def make_spec(self):
         specs = [{}]
         spec_index = 0
         for query in self.queries:
@@ -186,3 +164,56 @@ class FindStatement(object):
             return specs[0]
         else:
             return {'$or' : specs}
+
+
+class CountStatement(Statement):
+    def __init__(self, query):
+        if isinstance(query, basestring):
+            query = count_stmt.parse(query)
+        self.tokens = query
+        self.spec = {}
+        self.queries = []
+        self._query_args()
+        self.spec = self.make_spec()
+    
+    @token_parser
+    def _query_args(self):
+        """Generate mongo arguments for this statement."""
+        eat = iter(list(self.tokens)).next
+        count = eat()
+        assert count == 'count'
+        next = eat()
+        assert next == 'where'
+        self.queries = self.parse_where_tokens(eat)
+
+class FindStatement(object):
+    def __init__(self, query):
+        if isinstance(query, basestring):
+            query = find_stmt.parse(query)
+        self.tokens = query
+        # these False values will be taken to mean 'all'
+        self.count = 0
+        self.fields = tuple()
+        self.spec = {}
+        self.queries = []
+        self._query_args()
+        self.spec = self.make_spec()
+
+    @token_parser
+    def _query_args(self):
+        """Generate mongo arguments for this statement."""
+        tokens = list(self.tokens)
+        iterator = iter(tokens)
+        eat = iterator.next
+        find = eat()
+        assert find == 'find'
+        next = eat()
+        if isinstance(next, int):
+            self.count = next
+            next = eat()
+        if isinstance(next, list):
+            self.fields = map(str, next)
+            next = eat()
+        assert next == 'where'
+        self.queries = self.parse_where_tokens(eat)
+
